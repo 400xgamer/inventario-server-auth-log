@@ -64,9 +64,35 @@
   <script>
     const API_BASE = '';
 
+    async function checkAuth() {
+      try {
+        const res = await fetch(`${API_BASE}/api/me`);
+        if (!res.ok) {
+          showToast('❌ Você não está autenticado. Redirecionando para login...', 'error');
+          setTimeout(() => window.location.href = '/', 2000);
+          return false;
+        }
+        const user = await res.json();
+        if (user.role !== 'admin') {
+          showToast('❌ Você não tem permissão de admin', 'error');
+          setTimeout(() => window.location.href = '/', 2000);
+          return false;
+        }
+        return true;
+      } catch (err) {
+        showToast(`❌ Erro ao verificar autenticação: ${err.message}`, 'error');
+        return false;
+      }
+    }
+
     async function loadUsers() {
       try {
         const res = await fetch(`${API_BASE}/api/users`);
+        if (res.status === 401) {
+          showToast('❌ Sessão expirada. Faça login novamente.', 'error');
+          setTimeout(() => window.location.href = '/', 2000);
+          return;
+        }
         if (!res.ok) throw new Error('Falha ao carregar usuários');
         const users = await res.json();
         displayUsers(users);
@@ -183,8 +209,12 @@
       setTimeout(() => toast.remove(), 3000);
     }
 
-    // Carregar usuários ao abrir a página
-    loadUsers();
+    // Verificar autenticação ao abrir a página
+    (async () => {
+      if (await checkAuth()) {
+        loadUsers();
+      }
+    })();
   </script>
 </body>
 </html>
