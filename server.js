@@ -73,12 +73,12 @@ function ensureDefaultAdmin() {
 
 // ===== MIDDLEWARE =====
 app.use(express.json({ limit: "5mb" }));
-app.set('trust proxy', TRUST_PROXY ? 1 : 0);
+app.set('trust proxy', 1);
 app.use(session({
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: "lax", secure: !DISABLE_HTTPS }
+  cookie: { httpOnly: true, sameSite: "none", secure: true }
 }));
 
 function requireAuth(req, res, next) {
@@ -199,6 +199,10 @@ app.get("/admin", (_req, res) => {
 });
 
 // ===== STATIC FRONTEND =====
+app.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  next();
+});
 app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
 app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 
