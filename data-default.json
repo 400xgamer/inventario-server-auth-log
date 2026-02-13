@@ -1631,17 +1631,17 @@
     {
       "username": "admin@3f.local",
       "role": "admin",
-      "passwordHash": "$2a$10$a9rikoC5q1Vrijdo0BwrVuZj5Wl5eEtCU3ch6DnUbtz6TcXiDStKi"
+      "passwordHash": "$2a$10$Laawl36BUvhnAUumS9Rk4e12o9bvb1kQgEcZwaM6jw3aQZDZuCc32"
     },
     {
       "username": "Marcelo@3f.local",
       "role": "user",
-      "passwordHash": "$2a$10$k.cCeCD6qKrPC5cwQNtBL.kzftChgHCyDWWGvFRnGaXRBQ8H2e7gC"
+      "passwordHash": "$2a$10$vWDPBQ3UObIFMY0vgWRJgeLuw/ZKYjqwq7x/qYvhvs5QAcDASE3p6"
     },
     {
       "username": "porducao@3f.local",
       "role": "user",
-      "passwordHash": "$2a$10$QGwn.pCqKxXFzZtsneRrDOgXe4nyl0/moJvkGAldKMzBgMKykP2w."
+      "passwordHash": "$2a$10$5vLdIGJvMdCNlmP.sPEbL.Z4KsQISiBzWKpOE5i.ieaj9amgxsnWm"
     }
   ],
   "logs": [
