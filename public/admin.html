@@ -209,12 +209,8 @@
       setTimeout(() => toast.remove(), 3000);
     }
 
-    // Verificar autenticação ao abrir a página
-    (async () => {
-      if (await checkAuth()) {
-        loadUsers();
-      }
-    })();
+    // Carregar usuários ao abrir a página
+    loadUsers();
   </script>
 </body>
 </html>
