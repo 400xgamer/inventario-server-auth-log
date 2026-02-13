@@ -4,153 +4,144 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin - Gerenciar Usuários</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <style>
-    body { font-family: 'Inter', sans-serif; background: #f9fafb; }
-    .card { background: #ffffff; }
-    .btn-primary { background: #ff6a00; color: white; }
-    .btn-primary:hover { filter: brightness(.95); }
-    .toast { position: fixed; right: 16px; bottom: 16px; padding: 12px 16px; border-radius: 8px; color: white; font-size: 14px; }
-    .toast.success { background: #16a34a; }
-    .toast.error { background: #dc2626; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 800px; margin: 40px auto; padding: 20px; }
+    h1 { margin-bottom: 20px; color: #333; }
+    .info { background: #e8f5e9; border: 1px solid #4caf50; color: #2e7d32; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    .error { background: #ffebee; border: 1px solid #f44336; color: #c62828; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+    .success { background: #e8f5e9; border: 1px solid #4caf50; color: #2e7d32; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+    
+    .form-group { margin: 20px 0; display: flex; flex-direction: column; }
+    label { font-weight: bold; margin-bottom: 5px; }
+    input, select { padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+    button { padding: 10px 20px; background: #ff6a00; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #e55a00; }
+    button.secondary { background: #666; margin-left: 10px; }
+    button.secondary:hover { background: #555; }
+    button.delete { background: #f44336; }
+    button.delete:hover { background: #d32f2f; }
+    
+    .users-list { background: white; padding: 20px; border-radius: 5px; }
+    .user-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 1px solid #ddd; border-radius: 5px; margin-bottom: 10px; }
+    .user-info { flex: 1; }
+    .user-role { font-size: 12px; color: #666; }
+    .user-actions { display: flex; gap: 10px; }
+    .user-actions button { padding: 5px 10px; font-size: 12px; }
   </style>
 </head>
-<body class="p-6">
-  <div class="max-w-2xl mx-auto">
-    <header class="mb-8">
-      <h1 class="text-3xl font-bold mb-2">Gerenciar Usuários</h1>
-      <p class="text-gray-600">Admin: Adicione, edite ou remova usuários do sistema</p>
-      <button onclick="location.href='/'" class="mt-2 text-blue-600 hover:underline"><i class="fas fa-arrow-left mr-2"></i>Voltar</button>
-    </header>
-
-    <!-- Form Adicionar/Editar -->
-    <div class="card rounded-lg shadow p-6 mb-6">
-      <h2 class="text-xl font-bold mb-4" id="form-title">Adicionar Novo Usuário</h2>
-      <form id="user-form" onsubmit="handleFormSubmit(e)">
-        <div class="mb-4">
-          <label class="block text-sm font-medium mb-1">Email do Usuário</label>
-          <input id="username" type="email" placeholder="usuario@3f.local" class="w-full border rounded-lg p-2" required>
-          <small class="text-gray-500">Não pode ser alterado após criar</small>
-        </div>
-        <div class="mb-4">
-          <label class="block text-sm font-medium mb-1">Senha</label>
-          <input id="password" type="password" placeholder="Digite a senha" class="w-full border rounded-lg p-2" required>
-          <small class="text-gray-500">Deixe em branco se estiver editando e não quer mudar</small>
-        </div>
-        <div class="mb-4">
-          <label class="block text-sm font-medium mb-1">Função</label>
-          <select id="role" class="w-full border rounded-lg p-2" required>
-            <option value="user">Usuário (user)</option>
-            <option value="admin">Administrador (admin)</option>
-          </select>
-        </div>
-        <div class="flex gap-2">
-          <button type="submit" class="btn-primary px-4 py-2 rounded-lg">Salvar Usuário</button>
-          <button type="button" onclick="resetForm()" class="px-4 py-2 rounded-lg border">Limpar</button>
-        </div>
-      </form>
-    </div>
-
-    <!-- Lista de Usuários -->
-    <div class="card rounded-lg shadow p-6">
-      <h2 class="text-xl font-bold mb-4">Usuários Cadastrados</h2>
-      <div id="users-list" class="space-y-3">
-        <p class="text-gray-500 text-center py-4">Carregando...</p>
+<body>
+  <div class="container">
+    <h1>Gerenciar Usuários - Inventário 3F</h1>
+    <p><a href="/">← Voltar</a></p>
+    
+    <div id="message"></div>
+    
+    <div style="background: white; padding: 20px; border-radius: 5px; margin-bottom: 30px;">
+      <h2 style="margin-bottom: 20px;">Adicionar/Editar Usuário</h2>
+      
+      <div class="form-group">
+        <label>Email do Usuário:</label>
+        <input type="email" id="username" placeholder="usuario@3f.local" required>
       </div>
+      
+      <div class="form-group">
+        <label>Senha:</label>
+        <input type="password" id="password" placeholder="Digite a senha">
+        <small style="color: #666; margin-top: 5px;">* Deixe vazio se estiver editando e não quer mudar a senha</small>
+      </div>
+      
+      <div class="form-group">
+        <label>Função:</label>
+        <select id="role">
+          <option value="user">Usuário</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      
+      <div>
+        <button onclick="salvarUsuario()">Salvar Usuário</button>
+        <button class="secondary" onclick="limparForm()">Limpar</button>
+      </div>
+    </div>
+    
+    <h2>Usuários Cadastrados</h2>
+    <div class="users-list" id="users-list">
+      <p>Carregando...</p>
     </div>
   </div>
 
   <script>
     const API_BASE = '';
 
-    async function checkAuth() {
+    async function carregarUsuarios() {
       try {
-        const res = await fetch(`${API_BASE}/api/me`);
-        if (!res.ok) {
-          showToast('❌ Você não está autenticado. Redirecionando para login...', 'error');
-          setTimeout(() => window.location.href = '/', 2000);
-          return false;
-        }
-        const user = await res.json();
-        if (user.role !== 'admin') {
-          showToast('❌ Você não tem permissão de admin', 'error');
-          setTimeout(() => window.location.href = '/', 2000);
-          return false;
-        }
-        return true;
-      } catch (err) {
-        showToast(`❌ Erro ao verificar autenticação: ${err.message}`, 'error');
-        return false;
-      }
-    }
-
-    async function loadUsers() {
-      try {
+        console.log('Carregando usuários...');
         const res = await fetch(`${API_BASE}/api/users`);
-        if (res.status === 401) {
-          showToast('❌ Sessão expirada. Faça login novamente.', 'error');
-          setTimeout(() => window.location.href = '/', 2000);
+        console.log('Resposta:', res.status);
+        
+        if (!res.ok) {
+          mostrarMensagem('Erro ao carregar usuários: ' + res.status, 'error');
           return;
         }
-        if (!res.ok) throw new Error('Falha ao carregar usuários');
-        const users = await res.json();
-        displayUsers(users);
-      } catch (err) {
-        showToast(`❌ ${err.message}`, 'error');
+        
+        const usuarios = await res.json();
+        console.log('Usuários:', usuarios);
+        
+        const list = document.getElementById('users-list');
+        if (!usuarios || usuarios.length === 0) {
+          list.innerHTML = '<p>Nenhum usuário cadastrado.</p>';
+          return;
+        }
+        
+        list.innerHTML = usuarios.map(u => `
+          <div class="user-item">
+            <div class="user-info">
+              <strong>${u.username}</strong><br>
+              <span class="user-role">Função: ${u.role === 'admin' ? '👤 Administrador' : '👥 Usuário'}</span>
+            </div>
+            <div class="user-actions">
+              <button onclick="editarUsuario('${u.username}')">Editar</button>
+              ${u.username !== 'admin@3f.local' ? `<button class="delete" onclick="removerUsuario('${u.username}')">Remover</button>` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch (erro) {
+        console.error('Erro:', erro);
+        mostrarMensagem('Erro ao carregar: ' + erro.message, 'error');
       }
     }
 
-    function displayUsers(users) {
-      const list = document.getElementById('users-list');
-      if (!users.length) {
-        list.innerHTML = '<p class="text-gray-500 text-center py-4">Nenhum usuário cadastrado</p>';
-        return;
-      }
-      list.innerHTML = users.map(u => `
-        <div class="flex items-center justify-between border rounded-lg p-3 bg-gray-50">
-          <div>
-            <p class="font-semibold">${u.username}</p>
-            <small class="text-gray-500">Função: <strong>${u.role}</strong></small>
-          </div>
-          <div class="flex gap-2">
-            <button onclick="editUser('${u.username}')" class="px-3 py-1 text-sm border rounded hover:bg-gray-100">
-              <i class="fas fa-edit"></i> Editar
-            </button>
-            <button onclick="deleteUser('${u.username}')" class="px-3 py-1 text-sm border rounded hover:bg-red-50 text-red-600" ${u.username === 'admin@3f.local' ? 'disabled' : ''}>
-              <i class="fas fa-trash"></i> Remover
-            </button>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function editUser(username) {
+    function editarUsuario(username) {
       document.getElementById('username').value = username;
       document.getElementById('username').disabled = true;
-      document.getElementById('password').placeholder = 'Deixe vazio para não mudar';
-      document.getElementById('form-title').textContent = `Editar: ${username}`;
-      document.querySelector('button[type="submit"]').textContent = 'Atualizar Usuário';
+      document.getElementById('password').placeholder = 'Deixe vazio para não mudar a senha';
     }
 
-    function resetForm() {
-      document.getElementById('user-form').reset();
+    function limparForm() {
+      document.getElementById('username').value = '';
       document.getElementById('username').disabled = false;
-      document.getElementById('form-title').textContent = 'Adicionar Novo Usuário';
-      document.querySelector('button[type="submit"]').textContent = 'Salvar Usuário';
+      document.getElementById('password').value = '';
+      document.getElementById('password').placeholder = 'Digite a senha';
+      document.getElementById('role').value = 'user';
     }
 
-    async function handleFormSubmit(e) {
-      e.preventDefault();
-      const username = document.getElementById('username').value;
+    async function salvarUsuario() {
+      const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
       const role = document.getElementById('role').value;
 
+      if (!username) {
+        mostrarMensagem('Digite um email', 'error');
+        return;
+      }
+
       try {
-        // Se usuário existe (editar)
         if (document.getElementById('username').disabled) {
+          // Editando - mudar senha
           if (!password) {
-            showToast('⚠️ Digite uma nova senha para atualizar', 'error');
+            mostrarMensagem('Digite uma nova senha', 'error');
             return;
           }
           const res = await fetch(`${API_BASE}/api/users/change-password`, {
@@ -158,12 +149,16 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, newPassword: password })
           });
-          if (!res.ok) throw new Error('Falha ao atualizar senha');
-          showToast(`✅ Senha de ${username} alterada com sucesso!`, 'success');
+          
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'Erro ao atualizar');
+          }
+          mostrarMensagem('✅ Senha alterada com sucesso!', 'success');
         } else {
-          // Criar novo
+          // Criando novo
           if (!password) {
-            showToast('⚠️ Digite uma senha', 'error');
+            mostrarMensagem('Digite uma senha', 'error');
             return;
           }
           const res = await fetch(`${API_BASE}/api/users`, {
@@ -171,46 +166,47 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password, role })
           });
+          
           if (!res.ok) {
             const err = await res.json();
-            throw new Error(err.error === 'exists' ? 'Usuário já existe' : 'Falha ao criar');
+            throw new Error(err.error === 'exists' ? 'Usuário já existe' : err.error || 'Erro ao criar');
           }
-          showToast(`✅ Usuário ${username} criado com sucesso!`, 'success');
+          mostrarMensagem('✅ Usuário criado com sucesso!', 'success');
         }
-        resetForm();
-        loadUsers();
-      } catch (err) {
-        showToast(`❌ ${err.message}`, 'error');
+        
+        limparForm();
+        carregarUsuarios();
+      } catch (erro) {
+        mostrarMensagem('❌ ' + erro.message, 'error');
       }
     }
 
-    async function deleteUser(username) {
-      if (username === 'admin@3f.local') {
-        showToast('❌ Não é permitido deletar o admin padrão', 'error');
-        return;
-      }
+    async function removerUsuario(username) {
       if (!confirm(`Tem certeza que quer remover ${username}?`)) return;
 
       try {
         const res = await fetch(`${API_BASE}/api/users/${username}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Falha ao remover usuário');
-        showToast(`✅ ${username} removido com sucesso!`, 'success');
-        loadUsers();
-      } catch (err) {
-        showToast(`❌ ${err.message}`, 'error');
+        if (!res.ok) throw new Error('Erro ao remover');
+        mostrarMensagem('✅ Usuário removido!', 'success');
+        carregarUsuarios();
+      } catch (erro) {
+        mostrarMensagem('❌ ' + erro.message, 'error');
       }
     }
 
-    function showToast(msg, type = 'success') {
-      const toast = document.createElement('div');
-      toast.className = `toast ${type}`;
-      toast.textContent = msg;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
+    function mostrarMensagem(msg, tipo) {
+      const div = document.getElementById('message');
+      div.innerHTML = `<div class="${tipo}">${msg}</div>`;
+      if (tipo === 'success') {
+        setTimeout(() => { div.innerHTML = ''; }, 3000);
+      }
     }
 
-    // Carregar usuários ao abrir a página
-    loadUsers();
+    // Carregar ao abrir
+    console.log('Página admin carregada');
+    carregarUsuarios();
   </script>
+      toast.textContent = msg;
+
 </body>
 </html>
