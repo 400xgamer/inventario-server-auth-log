@@ -73,12 +73,12 @@ function ensureDefaultAdmin() {
 
 // ===== MIDDLEWARE =====
 app.use(express.json({ limit: "5mb" }));
-app.set('trust proxy', TRUST_PROXY ? 1 : 0);
+app.set('trust proxy', 1);
 app.use(session({
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: "lax", secure: !DISABLE_HTTPS }
+  cookie: { httpOnly: true, sameSite: "none", secure: true }
 }));
 
 function requireAuth(req, res, next) {
@@ -198,7 +198,25 @@ app.get("/admin", (_req, res) => {
   res.send(adminHtml);
 });
 
+// ===== ADMIN UTIL =====
+// Rota temporária: importa data-default.json para data.json (exige admin)
+app.post('/admin/import-default', requireAuth, requireAdmin, (_req, res) => {
+  const defaultPath = path.join(__dirname, 'data-default.json');
+  if (!fs.existsSync(defaultPath)) return res.status(404).json({ error: 'missing_default' });
+  try {
+    fs.copyFileSync(defaultPath, DATA_FILE);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[admin/import-default] error', err);
+    return res.status(500).json({ error: 'copy_failed' });
+  }
+});
+
 // ===== STATIC FRONTEND =====
+app.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  next();
+});
 app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
 app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 
