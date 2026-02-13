@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Controle de Estoque - 3F Resinados</title>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --brand-orange:#ff6a00;
+      --brand-gray-900:#0f172a;
+      --brand-gray-800:#1f2937;
+      --brand-gray-700:#374151;
+      --brand-gray-100:#f9fafb; /* fundo geral mais claro */
+      --surface:#ffffff;         /* fundo cartões */
+      --text:#111827;            /* texto principal escuro */
+      --muted:#374151;           /* secundário mais forte */
+      --ring:#3b82f6;
+    }
+    
+    body{ font-family:'Inter',sans-serif; background:var(--brand-gray-100); color:var(--text);}    
+    .card{ background:var(--surface); }
+    .sortable-header{ cursor:pointer; user-select:none; }
+    .sortable-header:hover{ background-color: rgba(0,0,0,.04); }
+    .btn-primary{ background:var(--brand-orange); color:white; }
+    .btn-primary:hover{ filter:brightness(.95); }
+    .btn-outline{ border:1px solid #d1d5db; }
+    .brand-border{ border-color:var(--brand-orange) !important; color:var(--brand-orange) !important; }
+    .nav-active{ border-bottom:2px solid var(--brand-orange); color:var(--brand-orange); }
+
+    /* Force light-only UI and improve contrast */
+    #theme-toggle{display:none;}
+    table thead{background:#e5e7eb; color:#111827;}
+    /* Badges with strong contrast */
+    .badge-adesivo{background:#2563eb; color:#fff; border-radius:9999px; padding:2px 8px; font-weight:600; font-size:12px;}
+    .badge-insumo{background:#16a34a; color:#fff; border-radius:9999px; padding:2px 8px; font-weight:600; font-size:12px;}
+    .badge-default{background:#6b7280; color:#fff; border-radius:9999px; padding:2px 8px; font-weight:600; font-size:12px;}
+    /* Low stock row */
+    tr.low-row{background:#fef9c3;}
+    /* Make 'muted' texts darker for readability */
+    .text-gray-500{color:#374151 !important;}
+    /* Print label only */
+    @media print{
+      body *{ visibility:hidden; }
+      #printable-label, #printable-label *{ visibility:visible; }
+      #printable-label{
+        position:absolute; left:0; top:0; width:100%; height:100%;
+        display:flex; align-items:center; justify-content:center;
+      }
+    }
+  
+/* Força fundo claro em elementos que ficaram escuros */
+.bg-gray-900,
+.dark\:bg-gray-900,
+.dark\:bg-gray-800 {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+/* Força fundo claro nas listas de tipos */
+#types-list li {
+  background: #f9fafb !important;
+  color: #111827 !important;
+}
+
+/* Estoque baixo: fundo branco com hover cinza */
+tr.low-row {
+  background: #ffffff !important;
+}
+tr.low-row:hover {
+  background: #e5e7eb !important;
+}
+
+/* Suavizar linhas de tabelas */
+table tr, table th, table td {
+  border-color: #e5e7eb !important; /* cinza claro */
+}
+table tr {
+  border-width: 0.5px !important; /* mais fino */
+}
+
+/* Toast notifications */
+#toast-container{position:fixed;right:16px;bottom:16px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{background:#111827;color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.15);font-size:14px;max-width:320px}
+.toast.success{background:#16a34a}
+.toast.warn{background:#dc2626}
+
+/* Hover claro em linhas */
+table tbody tr:hover { background: #f3f4f6 !important; color: #111827 !important; }
+.dark\:hover\:bg-gray-900:hover,
+.dark\:hover\:bg-gray-800:hover { background: #f3f4f6 !important; color: #111827 !important; }
+  </style>
+</head>
+<body class="selection:bg-orange-100 selection:text-orange-900">
+
+  <div class="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+    <header class="mb-6 flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl md:text-4xl font-extrabold">Controle de Estoque</h1>
+        <p class="text-sm text-gray-500">Adesivos & Insumos — 3F Resinados</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="low-bell" class="relative px-3 py-2 rounded-lg btn-outline text-sm hover:bg-gray-50" title="Itens com estoque baixo">
+          <i class="fa-solid fa-bell"></i>
+          <span id="low-badge" class="absolute -top-1 -right-1 text-[10px] font-bold bg-red-600 text-white rounded-full px-1.5 py-[1px] hidden">0</span>
+        </button>
+        <button id="theme-toggle" class="px-3 py-2 rounded-lg btn-outline text-sm hover:bg-gray-100">
+          <i class="fa-solid fa-moon mr-2"></i><span>Modo escuro</span>
+        </button>
+      </div>
+    </header>
+
+    <nav class="mb-6">
+      <div class="flex border-b border-gray-200 dark:border-gray-700">
+        <button id="nav-estoque"   class="nav-btn flex-1 py-3 px-2 text-center font-semibold nav-active"><i class="fas fa-boxes-stacked mr-2"></i>Estoque</button>
+        <button id="nav-cadastros" class="nav-btn flex-1 py-3 px-2 text-center font-semibold hover:text-[var(--brand-orange)]"><i class="fas fa-edit mr-2"></i>Cadastros</button>
+        <button id="nav-dashboard" class="nav-btn flex-1 py-3 px-2 text-center font-semibold hover:text-[var(--brand-orange)]"><i class="fa-solid fa-chart-pie mr-2"></i>Dashboard</button>
+        <button id="nav-history" class="nav-btn flex-1 py-3 px-2 text-center font-semibold hover:text-[var(--brand-orange)]"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Histórico</button>
+      </div>
+    </nav>
+
+    <main id="inventory-view">
+      <div class="card p-4 rounded-lg shadow mb-6 flex flex-col xl:flex-row justify-between items-center gap-4">
+        <div class="w-full xl:w-auto flex flex-col sm:flex-row gap-3">
+          <button id="add-item-btn" class="w-full sm:w-auto btn-primary font-semibold py-2 px-4 rounded-lg shadow flex items-center justify-center gap-2" title="n">
+            <i class="fas fa-plus-circle"></i> Adicionar Item
+          </button>
+          <button id="scan-qr-btn" class="w-full sm:w-auto bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg shadow hover:bg-gray-800 flex items-center justify-center gap-2" title="q">
+            <i class="fas fa-qrcode"></i> Ler QR para Baixa
+          </button>
+        </div>
+        <div class="w-full xl:w-auto flex flex-col sm:flex-row gap-3">
+          <input id="search-filter" type="text" placeholder="Buscar por nome ou marca..." class="w-full sm:w-auto border rounded-lg p-2 focus:outline-none focus:ring-2" title="/" />
+          <select id="type-filter" class="w-full sm:w-auto border rounded-lg p-2 focus:outline-none focus:ring-2"></select>
+          <button id="export-btn" class="w-full sm:w-auto bg-white btn-outline text-gray-700 font-semibold py-2 px-3 rounded-lg hover:bg-gray-50 flex items-center justify-center gap-2">
+            <i class="fa-solid fa-file-export"></i> Exportar
+          </button>
+          <label class="w-full sm:w-auto inline-flex items-center gap-2 bg-white btn-outline text-gray-700 font-semibold py-2 px-3 rounded-lg hover:bg-gray-50 cursor-pointer">
+            <i class="fa-solid fa-file-import"></i> Importar
+            <input id="import-input" type="file" accept="application/json" class="hidden" />
+          </label>
+        </div>
+      </div>
+
+      <div class="card rounded-lg shadow overflow-x-auto">
+        <table class="w-full text-left">
+          <thead id="inventory-table-head" class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+            <tr>
+              <th class="p-4 font-semibold sortable-header" data-sort="product">Produto <span class="sort-icon"></span></th>
+              <th class="p-4 font-semibold sortable-header hidden md:table-cell" data-sort="brand">Marca <span class="sort-icon"></span></th>
+              <th class="p-4 font-semibold sortable-header" data-sort="type">Tipo <span class="sort-icon"></span></th>
+              <th class="p-4 font-semibold sortable-header text-center" data-sort="quantity">Quantidade <span class="sort-icon"></span></th>
+              <th class="p-4 font-semibold text-center">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="inventory-table-body"></tbody>
+        </table>
+        <p id="empty-state" class="text-center text-gray-500 p-8 hidden">Nenhum item encontrado. Clique em “Adicionar Item”.</p>
+      </div>
+    </main>
+
+    <main id="register-view" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-1 flex flex-col gap-6">
+          <div class="card p-6 rounded-lg shadow">
+            <h2 id="register-form-title" class="text-2xl font-bold mb-4">Cadastrar Produto</h2>
+            <form id="register-form">
+              <input type="hidden" id="base-product-id">
+              <div class="mb-4">
+                <label class="block text-sm mb-1">Nome do Produto</label>
+                <input id="base-product-name" class="w-full border rounded-lg p-2" required>
+              </div>
+              <div class="mb-4">
+                <label class="block text-sm mb-1">Marca</label>
+                <input id="base-product-brand" class="w-full border rounded-lg p-2" required>
+              </div>
+              <div class="mb-4">
+                <label class="block text-sm mb-1">Tipo</label>
+                <select id="base-product-type" class="w-full border rounded-lg p-2" required></select>
+              </div>
+              <div class="mb-4">
+                <label class="block text-sm mb-1">Qtd. Mínima para Alerta</label>
+                <input id="base-product-min-quantity" type="number" min="0" value="10" class="w-full border rounded-lg p-2" required>
+              </div>
+              <div class="flex justify-end gap-3 mt-6">
+                <button type="button" id="cancel-register-edit-btn" class="px-4 py-2 rounded-lg btn-outline hidden">Cancelar</button>
+                <button type="submit" class="px-4 py-2 rounded-lg btn-primary">Salvar Produto</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card p-6 rounded-lg shadow">
+            <h2 class="text-2xl font-bold mb-4">Gerenciar Tipos</h2>
+            <form id="type-form" class="flex gap-2 mb-4">
+              <input id="type-name-input" placeholder="Nome do novo tipo" class="w-full border rounded-lg p-2" required>
+              <button class="px-3 rounded-lg btn-primary" title="Adicionar"><i class="fas fa-plus"></i></button>
+            </form>
+            <ul id="types-list" class="space-y-2 max-h-48 overflow-y-auto pr-2"></ul>
+          </div>
+        </div>
+
+        <div class="lg:col-span-2">
+          <div class="card rounded-lg shadow overflow-x-auto">
+            <table class="w-full text-left">
+              <thead class="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+                <tr>
+                  <th class="p-4 font-semibold">Produto</th>
+                  <th class="p-4 font-semibold hidden md:table-cell">Marca</th>
+                  <th class="p-4 font-semibold text-center hidden sm:table-cell">Qtd. Mínima</th>
+                  <th class="p-4 font-semibold text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="base-products-table-body"></tbody>
+            </table>
+            <p id="empty-base-products-state" class="text-center text-gray-500 p-8 hidden">Nenhum produto cadastrado.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <main id="dashboard-view" class="hidden">
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+        <div class="card rounded-lg shadow p-5">
+          <div class="text-sm text-gray-500">Itens em estoque</div>
+          <div id="kpi-total-qty" class="text-3xl font-extrabold">0</div>
+        </div>
+        <div class="card rounded-lg shadow p-5">
+          <div class="text-sm text-gray-500">SKUs (itens distintos)</div>
+          <div id="kpi-skus" class="text-3xl font-extrabold">0</div>
+        </div>
+        <div class="card rounded-lg shadow p-5">
+          <div class="text-sm text-gray-500">Estoque baixo (≤ mínimo)</div>
+          <div id="kpi-low" class="text-3xl font-extrabold text-red-600">0</div>
+        </div>
+        <div class="card rounded-lg shadow p-5">
+          <div class="text-sm text-gray-500">Tipos distintos</div>
+          <div id="kpi-types" class="text-3xl font-extrabold">0</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div class="card rounded-lg shadow p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Quantidade por Tipo</h3>
+          </div>
+          <canvas id="chart-by-type" height="240"></canvas>
+        </div>
+
+        <div class="card rounded-lg shadow p-5 xl:col-span-2">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-semibold">Top Marcas por Quantidade</h3>
+            <div class="flex gap-2">
+              <select id="dash-brand-type-filter" class="border rounded px-2 py-1 text-sm">
+                <option value="all" selected>Todos os Tipos</option>
+              </select>
+              <select id="dash-brand-limit" class="border rounded px-2 py-1 text-sm">
+                <option value="5">Top 5</option>
+                <option value="10" selected>Top 10</option>
+                <option value="20">Top 20</option>
+              </select>
+            </div>
+          </div>
+          <canvas id="chart-by-brand" height="240"></canvas>
+        </div>
+      </div>
+
+      <div class="card rounded-lg shadow p-5 mt-6">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-lg font-semibold">Evolução diária por Tipo (últimos 30 dias)</h3>
+          <span class="text-xs text-gray-500">Snapshots automáticos sempre que o estoque muda</span>
+        </div>
+        <canvas id="chart-type-over-time" height="260"></canvas>
+      </div>
+
+      <div class="card rounded-lg shadow p-5 mt-6">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Itens com Estoque Baixo</h3>
+          <div class="flex gap-2">
+            <button id="export-low-csv" class="text-sm border px-3 py-1 rounded hover:bg-gray-50">Exportar CSV</button>
+            <button id="go-to-purchase" class="text-sm border px-3 py-1 rounded hover:bg-gray-50 brand-border">Ir para Compras</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto mt-3">
+          <table class="w-full text-left">
+            <thead class="bg-gray-50 dark:bg-gray-900 border-b">
+              <tr>
+                <th class="p-3">Produto</th>
+                <th class="p-3">Marca</th>
+                <th class="p-3">Tipo</th>
+                <th class="p-3 text-center">Qtd</th>
+                <th class="p-3 text-center">Mínimo</th>
+                <th class="p-3 text-center">Faltam</th>
+              </tr>
+            </thead>
+            <tbody id="low-stock-tbody"></tbody>
+          </table>
+          <p id="low-stock-empty" class="text-center text-gray-500 p-6 hidden">Tudo certo — nenhum item abaixo do mínimo.</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== Histórico ===== -->
+    <main id="history-view" class="hidden">
+      <div class="card rounded-lg shadow p-5 mb-4">
+        <div class="flex flex-col md:flex-row gap-3 md:items-end">
+          <div>
+            <label class="block text-sm mb-1">Usuário</label>
+            <input id="hist-user" class="border rounded-lg p-2" placeholder="filtrar por email">
+          </div>
+          <div>
+            <label class="block text-sm mb-1">Ação</label>
+            <select id="hist-action" class="border rounded-lg p-2">
+              <option value="">Todas</option>
+              <option value="add">Entrada (+)</option>
+              <option value="deduct">Baixa (−)</option>
+              <option value="delete">Exclusão</option>
+              <option value="create">Cadastro</option>
+              <option value="update">Edição</option>
+            </select>
+          </div>
+          <div class="flex-1"></div>
+          <button id="hist-refresh" class="btn-outline px-3 py-2 rounded-lg">Atualizar</button>
+        </div>
+      </div>
+      <div class="card rounded-lg shadow overflow-x-auto">
+        <table class="w-full text-left">
+          <thead class="bg-gray-50 border-b">
+            <tr>
+              <th class="p-3">Data/Hora</th>
+              <th class="p-3">Usuário</th>
+              <th class="p-3">Ação</th>
+              <th class="p-3">Produto</th>
+              <th class="p-3 text-center">Antes</th>
+              <th class="p-3 text-center">Δ</th>
+              <th class="p-3 text-center">Depois</th>
+              <th class="p-3">Obs.</th>
+            </tr>
+          </thead>
+          <tbody id="hist-tbody"></tbody>
+        </table>
+        <p id="hist-empty" class="text-center text-gray-500 p-6 hidden">Sem movimentações.</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- ===== Modais existentes ===== -->
+  <div id="item-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+    <div class="card rounded-lg shadow-2xl p-6 w-full max-w-md">
+      <h2 id="modal-title" class="text-2xl font-bold mb-4">Adicionar Item ao Estoque</h2>
+      <form id="item-form">
+        <input type="hidden" id="item-id-hidden">
+        <div class="mb-4">
+          <label class="block text-sm mb-1">Selecione o Produto</label>
+          <select id="item-name-select" class="w-full border rounded-lg p-2" required></select>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm mb-1">Marca</label>
+          <input id="item-brand" class="w-full border rounded-lg p-2 bg-gray-100 dark:bg-gray-900" readonly>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm mb-1">Tipo</label>
+          <input id="item-type" class="w-full border rounded-lg p-2 bg-gray-100 dark:bg-gray-900" readonly>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm mb-1">Quantidade a Adicionar</label>
+          <input id="item-quantity" type="number" min="1" class="w-full border rounded-lg p-2" required>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button type="button" id="cancel-btn" class="px-4 py-2 rounded-lg btn-outline">Cancelar</button>
+          <button class="px-4 py-2 rounded-lg btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="deduct-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+    <div class="card rounded-lg shadow-2xl p-6 w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-2">Dar Baixa no Estoque</h2>
+      <p class="mb-2">Produto: <span id="deduct-item-name" class="font-semibold"></span></p>
+      <form id="deduct-form">
+        <input type="hidden" id="deduct-item-id">
+        <div class="mb-2">Quantidade atual: <span id="deduct-current-quantity" class="font-bold"></span></div>
+        <div class="mb-4">
+          <label class="block text-sm mb-1">Quantidade a Retirar</label>
+          <input id="deduct-quantity" type="number" min="1" class="w-full border rounded-lg p-2" required>
+        </div>
+        <div class="flex justify-between items-center gap-3 mt-2">
+          <div class="flex gap-2">
+            <button type="button" id="quick-minus-1" class="px-3 py-2 rounded border">–1</button>
+            <button type="button" id="quick-plus-1" class="px-3 py-2 rounded border">+1</button>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" id="cancel-deduct-btn" class="px-4 py-2 rounded-lg btn-outline">Cancelar</button>
+            <button class="px-4 py-2 rounded-lg bg-red-600 text-white">Confirmar Baixa</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="label-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+    <div class="card rounded-lg shadow-2xl p-6 w-full max-w-sm text-center">
+      <h2 class="text-2xl font-bold mb-4">Etiqueta do Produto</h2>
+      <div id="printable-label" class="border-2 border-dashed border-gray-300 p-4 mb-4">
+        <div id="qrcode" class="mx-auto my-4 w-40 h-40"></div>
+        <h3 id="label-item-name" class="text-xl font-bold break-words">Nome do Produto</h3>
+        <p id="label-item-brand" class="text-gray-600 break-words">Marca do Produto</p>
+        <p id="label-item-id" class="text-xs text-gray-400 mt-2">ID: 123456789</p>
+      </div>
+      <div class="flex justify-center gap-3 mt-4">
+        <button id="close-label-btn" class="px-4 py-2 rounded-lg btn-outline">Fechar</button>
+        <button id="print-label-btn" class="px-4 py-2 rounded-lg bg-green-600 text-white flex items-center gap-2"><i class="fas fa-print"></i> Imprimir</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="scanner-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+    <div class="card rounded-lg shadow-2xl p-6 w-full max-w-md">
+      <h2 class="text-2xl font-bold mb-4">Aponte para o QR Code</h2>
+      <div id="qr-reader" class="w-full"></div>
+      <button id="close-scanner-btn" class="mt-4 w-full px-4 py-2 rounded-lg btn-outline">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ===== Modal de Login ===== -->
+  <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+    <div class="card rounded-lg shadow-2xl p-6 w-full max-w-sm">
+      <h2 class="text-2xl font-bold mb-4">Entrar</h2>
+      <form id="login-form" class="space-y-3">
+        <div>
+          <label class="block text-sm mb-1">Usuário (email)</label>
+          <input id="login-username" type="email" class="w-full border rounded-lg p-2" placeholder="admin@3f.local" required>
+        </div>
+        <div>
+          <label class="block text-sm mb-1">Senha</label>
+          <input id="login-password" type="password" class="w-full border rounded-lg p-2" placeholder="••••••••" required>
+        </div>
+        <p id="login-error" class="text-red-600 text-sm hidden">Usuário ou senha inválidos.</p>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="submit" class="px-4 py-2 rounded-lg btn-primary">Entrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // ====== CONFIG ======
+    const KEYS = {
+      INVENTORY:'inventory',
+      BASE:'baseProducts',
+      TYPES:'materialTypes',
+      META:'appMeta',
+      DAILY:'stockDailyTotals'
+    };
+    const APP = { version:2 };
+    const DEFAULT_TYPES = ['Adesivo','Insumo'];
+
+    // WhatsApp compras
+    const DEFAULT_WA_NUMBER = '';
+
+    // ====== DOM ======
+    const navEstoqueBtn   = document.getElementById('nav-estoque');
+    const navCadastrosBtn = document.getElementById('nav-cadastros');
+    const navDashboardBtn = document.getElementById('nav-dashboard');
+    const navHistoryBtn   = document.getElementById('nav-history');
+
+    const inventoryView   = document.getElementById('inventory-view');
+    const registerView    = document.getElementById('register-view');
+    const dashboardView   = document.getElementById('dashboard-view');
+    const historyView     = document.getElementById('history-view');
+
+    const themeToggleBtn  = document.getElementById('theme-toggle');
+
+    // Inventory DOM
+    const searchFilter = document.getElementById('search-filter');
+    const typeFilterSelect = document.getElementById('type-filter');
+    const inventoryTableHead = document.getElementById('inventory-table-head');
+    const inventoryTableBody = document.getElementById('inventory-table-body');
+    const emptyState = document.getElementById('empty-state');
+
+    // Cadastros DOM
+    const typeForm = document.getElementById('type-form');
+    const typeNameInput = document.getElementById('type-name-input');
+    const typesList = document.getElementById('types-list');
+    const baseProductTypeSelect = document.getElementById('base-product-type');
+
+    const registerForm = document.getElementById('register-form');
+    const baseProductsTableBody = document.getElementById('base-products-table-body');
+    const emptyBaseProductsState = document.getElementById('empty-base-products-state');
+    const registerFormTitle = document.getElementById('register-form-title');
+    const cancelRegisterEditBtn = document.getElementById('cancel-register-edit-btn');
+
+    // Modais
+    const itemModal = document.getElementById('item-modal');
+    const addItemBtn = document.getElementById('add-item-btn');
+    const itemForm = document.getElementById('item-form');
+    const itemNameSelect = document.getElementById('item-name-select');
+
+    const deductModal = document.getElementById('deduct-modal');
+    const deductForm = document.getElementById('deduct-form');
+    const quickMinusBtn = document.getElementById('quick-minus-1');
+    const quickPlusBtn  = document.getElementById('quick-plus-1');
+
+    const labelModal = document.getElementById('label-modal');
+    const qrCodeContainer = document.getElementById('qrcode');
+
+    const scannerModal = document.getElementById('scanner-modal');
+    const scanQrBtn = document.getElementById('scan-qr-btn');
+
+    // Dashboard DOM
+    const kpiTotalQty = document.getElementById('kpi-total-qty');
+    const kpiSkus = document.getElementById('kpi-skus');
+    const kpiLow = document.getElementById('kpi-low');
+    const kpiTypes = document.getElementById('kpi-types');
+    const dashBrandTypeFilter = document.getElementById('dash-brand-type-filter');
+    const dashBrandLimit = document.getElementById('dash-brand-limit');
+    const lowStockBody = document.getElementById('low-stock-tbody');
+    const lowStockEmpty = document.getElementById('low-stock-empty');
+    const exportLowCSVBtn = document.getElementById('export-low-csv');
+    const goToPurchaseBtn = document.getElementById('go-to-purchase');
+
+    // Notificações DOM
+    const lowBell = document.getElementById('low-bell');
+    const lowBadge = document.getElementById('low-badge');
+    const toastContainer = document.getElementById('toast-container');
+
+    // Backup
+    const exportBtn = document.getElementById('export-btn');
+    const importInput = document.getElementById('import-input');
+
+    // ====== ESTADO ======
+    let inventory = [];
+    let baseProducts = [];
+    let materialTypes = [];
+    let meta = {};
+    let dailyTotals = {};
+
+    const KEYS_NOTIFY = 'lowNotified';
+    let lowNotified = JSON.parse(localStorage.getItem(KEYS_NOTIFY) || '[]');
+
+    function showToast(msg, kind='warn'){
+      const el = document.createElement('div');
+      el.className = `toast ${kind}`;
+      el.textContent = msg;
+      toastContainer.appendChild(el);
+      setTimeout(()=> el.remove(), 4500);
+    }
+
+    function notifyNative(title, body){
+      try{
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'granted') new Notification(title, { body });
+        else if (Notification.permission !== 'denied'){
+          Notification.requestPermission().then(p=>{ if (p==='granted') new Notification(title, { body }); });
+        }
+      }catch(_){}
+    }
+
+    function updateLowBadge(){
+      const n = getLowStockItems().length;
+      if (n>0){ lowBadge.textContent = n; lowBadge.classList.remove('hidden'); }
+      else { lowBadge.classList.add('hidden'); }
+    }
+
+    function checkLowStockAndNotify(){
+      const lows = getLowStockItems();
+      updateLowBadge();
+      const newOnes = lows.filter(it=> !lowNotified.includes(it.id));
+      if (newOnes.length){
+        if (newOnes.length===1){
+          const it = newOnes[0];
+          const msg = `${it.name} (${it.brand}) atingiu o mínimo (${it.quantity}/${it.minQuantity}).`;
+          showToast(msg, 'warn'); notifyNative('Baixo estoque', msg);
+        } else {
+          const msg = `${newOnes.length} itens estão abaixo do mínimo. Veja no Dashboard.`;
+          showToast(msg, 'warn'); notifyNative('Baixo estoque', msg);
+        }
+        lowNotified = [...lowNotified, ...newOnes.map(i=>i.id)];
+        localStorage.setItem(KEYS_NOTIFY, JSON.stringify(lowNotified));
+      }
+      const lowIds = lows.map(i=>i.id);
+      const cleaned = lowNotified.filter(id => lowIds.includes(id));
+      if (cleaned.length !== lowNotified.length){
+        lowNotified = cleaned; localStorage.setItem(KEYS_NOTIFY, JSON.stringify(lowNotified));
+      }
+    }
+
+    let sortConfig = { key:'product', direction:'asc' };
+    let html5QrCode = null;
+
+    // ====== THEME ======
+    function applyTheme(theme){
+      document.documentElement.setAttribute('data-theme', theme);
+      themeToggleBtn.querySelector('i').className = theme==='dark' ? 'fa-solid fa-sun mr-2' : 'fa-solid fa-moon mr-2';
+      themeToggleBtn.querySelector('span').textContent = theme==='dark' ? 'Modo claro' : 'Modo escuro';
+    }
+    const savedTheme = 'light'; applyTheme(savedTheme);
+
+    // ====== AUTH helpers ======
+    async function apiMe(){
+      const r = await fetch('/api/me', { credentials:'include' });
+      if (r.ok) return r.json();
+      throw new Error('unauthorized');
+    }
+    function showLogin(){
+      document.getElementById('login-modal').classList.remove('hidden');
+      setTimeout(()=>document.getElementById('login-username').focus(), 50);
+    }
+    function hideLogin(){
+      document.getElementById('login-modal').classList.add('hidden');
+    }
+    async function requireAuth(){
+      try { await apiMe(); return true; }
+      catch { showLogin(); return false; }
+    }
+    const loginForm = document.getElementById('login-form');
+    loginForm?.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      document.getElementById('login-error').classList.add('hidden');
+      try{
+        const r = await fetch('/api/login', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          credentials:'include', body: JSON.stringify({ username, password })
+        });
+        if (!r.ok) throw new Error('login failed');
+        hideLogin();
+        loadDataFromServer();
+      }catch(err){ document.getElementById('login-error').classList.remove('hidden'); }
+    });
+
+    // ====== HELPERS ======
+    async function saveDataToServer() {
+      const payload = { inventory, baseProducts, materialTypes, dailyTotals, meta };
+      try {
+        const response = await fetch('/api/data', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials:'include', body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error('Falha ao salvar dados no servidor.');
+      } catch (error) {
+        console.error(error);
+        alert('ERRO: Não foi possível salvar os dados no servidor. Verifique a conexão.');
+      }
+    }
+
+    const saveInventory = saveDataToServer;
+    const saveBaseProducts = saveDataToServer;
+    const saveMaterialTypes = saveDataToServer;
+    const saveDailyTotals = saveDataToServer;
+
+    const clampInt = (n, min=0)=> isNaN(n) ? min : Math.max(min, Math.floor(n));
+    const unique = arr => [...new Set(arr)];
+    const todayKey = (d=new Date()) => d.toISOString().slice(0,10);
+
+    <!-- ====== FIX: geração de IDs e deduplicação ====== -->
+
+function genUniqueId() {
+  // ID de 13+ dígitos, com baixa chance de colisão
+  return String(Date.now() + Math.floor(Math.random() * 100000));
+}
+
+// Corrige baseProducts com IDs duplicados e ajusta inventory
+function ensureUniqueBaseProductIds() {
+  const seen = new Map();      // id -> baseProduct (primeiro)
+  const renames = [];          // [{oldId, newId, name, brand}]
+
+  for (let i = 0; i < baseProducts.length; i++) {
+    const bp = baseProducts[i];
+    if (seen.has(bp.id)) {
+      let newId = genUniqueId();
+      while (baseProducts.some(x => x.id === newId)) newId = genUniqueId();
+      renames.push({ oldId: bp.id, newId, name: bp.name, brand: bp.brand });
+      bp.id = newId;
+      seen.set(newId, bp);
+    } else {
+      seen.set(bp.id, bp);
+    }
+  }
+
+  // Realinha itens de estoque que apontavam para o id antigo
+  if (renames.length) {
+    inventory.forEach(it => {
+      renames.forEach(rn => {
+        if (it.baseProductId === rn.oldId) {
+          const sameName  = it.name  === rn.name;
+          const sameBrand = !rn.brand || it.brand === rn.brand;
+          if (sameName && sameBrand) it.baseProductId = rn.newId;
+        }
+      });
+    });
+  }
+}
+
+// Evita (nome+marca) duplicados em baseProducts
+function existsBaseByNameBrand(name, brand, exceptId=null) {
+  const n = (name||'').trim().toLowerCase();
+  const b = (brand||'').trim().toLowerCase();
+  return baseProducts.some(p => {
+    if (exceptId && p.id === exceptId) return false;
+    return p.name.trim().toLowerCase() === n && p.brand.trim().toLowerCase() === b;
+  });
+}
+
+
+    function recordDailySnapshot() {
+      const day = todayKey();
+      const sums = {};
+      inventory.forEach(it => { sums[it.type] = (sums[it.type]||0) + (Number(it.quantity)||0); });
+      dailyTotals[day] = sums;
+      saveDailyTotals();
+    }
+
+    function runMigration() {
+      if ((meta.version||1) < APP.version){
+        inventory = inventory.map(i=> ({...i, minQuantity: typeof i.minQuantity==='number'? i.minQuantity:0}));
+        meta.version = APP.version;
+        saveDataToServer();
+      }
+    }
+
+    // ====== NAV ======
+    function setActive(btn){
+      [navEstoqueBtn, navCadastrosBtn, navDashboardBtn, navHistoryBtn].forEach(b=>b.classList.remove('nav-active'));
+      btn.classList.add('nav-active');
+    }
+    function showOnly(view){
+      inventoryView.classList.add('hidden');
+      registerView.classList.add('hidden');
+      dashboardView.classList.add('hidden');
+      historyView.classList.add('hidden');
+      view.classList.remove('hidden');
+    }
+    function switchView(which){
+      if (which==='inventory'){ setActive(navEstoqueBtn); showOnly(inventoryView); renderInventory(); }
+      else if (which==='cadastros'){ setActive(navCadastrosBtn); showOnly(registerView); renderBaseProducts(); renderMaterialTypes(); }
+      else { setActive(navDashboardBtn); showOnly(dashboardView); renderDashboard(); }
+    }
+    function switchViewWithHistory(which){
+      if (which==='history'){ setActive(navHistoryBtn); showOnly(historyView); refreshHistory(); }
+      else switchView(which);
+    }
+    navEstoqueBtn.addEventListener('click', ()=>switchView('inventory'));
+    navCadastrosBtn.addEventListener('click', ()=>switchView('cadastros'));
+    navDashboardBtn.addEventListener('click', ()=>switchView('dashboard'));
+    navHistoryBtn.addEventListener('click', ()=>switchViewWithHistory('history'));
+
+    lowBell?.addEventListener('click', ()=>{
+      switchView('dashboard');
+      document.getElementById('low-stock-tbody')?.scrollIntoView({ behavior:'smooth', block:'start' });
+    });
+
+    // ====== TYPES ======
+    function renderMaterialTypes(){
+      typesList.innerHTML = '';
+      materialTypes.forEach(type=>{
+        const li = document.createElement('li');
+        li.className = 'flex justify-between items-center bg-gray-100 dark:bg-gray-900 p-2 rounded-lg';
+        li.innerHTML = `
+          <span>${type}</span>
+          <button class="delete-type-btn text-red-500 hover:text-red-700" data-type="${type}" title="Excluir tipo"><i class="fas fa-trash"></i></button>
+        `;
+        typesList.appendChild(li);
+      });
+
+      baseProductTypeSelect.innerHTML = '';
+      materialTypes.forEach(t => baseProductTypeSelect.innerHTML += `<option value="${t}">${t}</option>`);
+
+      typeFilterSelect.innerHTML = '<option value="all">Todos os Tipos</option>';
+      materialTypes.forEach(t => typeFilterSelect.innerHTML += `<option value="${t}">${t}</option>`);
+    }
+    typeForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const name = (typeNameInput.value||'').trim();
+      if (!name || materialTypes.some(t=>t.toLowerCase()===name.toLowerCase())) return alert('Tipo inválido ou já existente.');
+      materialTypes.push(name); saveMaterialTypes(); renderMaterialTypes(); typeNameInput.value='';
+    });
+    typesList.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.delete-type-btn'); if (!btn) return;
+      const t = btn.dataset.type;
+      if (baseProducts.some(p=>p.type===t)) return alert('Tipo em uso por um produto.');
+      materialTypes = materialTypes.filter(x=>x!==t); saveMaterialTypes(); renderMaterialTypes();
+    });
+
+    // ====== BASE PRODUCTS ======
+    let editingBaseProductId = null;
+    function renderBaseProducts(){
+      baseProductsTableBody.innerHTML = '';
+      emptyBaseProductsState.classList.toggle('hidden', baseProducts.length>0);
+      baseProducts.forEach(p=>{
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-gray-200 dark:border-gray-800 hover:bg-gray-100';
+        tr.innerHTML = `
+          <td class="p-4">
+            <div class="font-medium">${p.name}</div>
+            <div class="text-sm text-gray-500 md:hidden">${p.brand}</div>
+          </td>
+          <td class="p-4 hidden md:table-cell">${p.brand}</td>
+          <td class="p-4 hidden sm:table-cell text-center">${p.minQuantity}</td>
+          <td class="p-4 text-center">
+            <div class="flex justify-center gap-2">
+              <button class="edit-base-product-btn text-blue-500 hover:text-blue-700" data-id="${p.id}" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+              <button class="delete-base-product-btn text-red-500 hover:text-red-700" data-id="${p.id}" title="Excluir"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        `;
+        baseProductsTableBody.appendChild(tr);
+      });
+    }
+    function resetRegisterForm(){
+      registerForm.reset(); editingBaseProductId = null;
+      registerFormTitle.textContent = 'Cadastrar Produto';
+      document.getElementById('base-product-min-quantity').value = 10;
+      cancelRegisterEditBtn.classList.add('hidden');
+    }
+    registerForm.addEventListener('submit',(e)=>{
+  e.preventDefault();
+
+  const name = document.getElementById('base-product-name').value.trim();
+  const brand = document.getElementById('base-product-brand').value.trim();
+  const type = document.getElementById('base-product-type').value;
+  const minQ = clampInt(parseInt(document.getElementById('base-product-min-quantity').value),0);
+
+  // Impede (nome+marca) duplicado
+  if (existsBaseByNameBrand(name, brand, editingBaseProductId)) {
+    alert('Já existe um produto base com esse NOME + MARCA.');
+    return;
+  }
+
+  // Gera ID único
+  let newId = editingBaseProductId || document.getElementById('base-product-id').value || genUniqueId();
+  if (!editingBaseProductId) {
+    while (baseProducts.some(p => p.id === newId)) newId = genUniqueId();
+  }
+
+  const payload = { id:newId, name, brand, type, minQuantity:minQ };
+
+  if (editingBaseProductId){
+    const prev = baseProducts.find(p=>p.id===editingBaseProductId);
+    baseProducts = baseProducts.map(p=>p.id===editingBaseProductId ? payload : p);
+    postLog({ action:'update', itemId: payload.id, productName: payload.name, note: 'Edição de produto base' });
+    if (prev && prev.minQuantity !== payload.minQuantity){
+      inventory = inventory.map(i=> i.baseProductId===payload.id ? {...i, minQuantity: payload.minQuantity} : i);
+      saveInventory();
+      recordDailySnapshot();
+    }
+  } else {
+    baseProducts.push(payload);
+  }
+
+  // Salva e atualiza
+  ensureUniqueBaseProductIds(); // defensivo
+  saveBaseProducts();
+  renderBaseProducts();
+  resetRegisterForm();
+});
+    baseProductsTableBody.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button'); if (!btn) return;
+      const id = btn.dataset.id;
+      if (btn.classList.contains('edit-base-product-btn')){
+        const p = baseProducts.find(x=>x.id===id);
+        document.getElementById('base-product-id').value = p.id;
+        document.getElementById('base-product-name').value = p.name;
+        document.getElementById('base-product-brand').value = p.brand;
+        document.getElementById('base-product-type').value = p.type;
+        document.getElementById('base-product-min-quantity').value = p.minQuantity;
+        editingBaseProductId = id; registerFormTitle.textContent='Editar Produto';
+        cancelRegisterEditBtn.classList.remove('hidden');
+      } else if (btn.classList.contains('delete-base-product-btn')){
+        if (confirm('Excluir produto base? (itens já no estoque permanecem)')){
+          baseProducts = baseProducts.filter(p=>p.id!==id); saveBaseProducts(); renderBaseProducts();
+        }
+      }
+    });
+    cancelRegisterEditBtn.addEventListener('click', resetRegisterForm);
+
+    // ====== INVENTORY ======
+    let isScanning = false;
+    function updateSortIcons(){
+      document.querySelectorAll('.sortable-header').forEach(h=>{
+        const key = h.dataset.sort; const span = h.querySelector('.sort-icon');
+        if (key===sortConfig.key){
+          span.innerHTML = sortConfig.direction==='asc'
+           ? ' <i class="fas fa-arrow-up text-gray-500"></i>'
+           : ' <i class="fas fa-arrow-down text-gray-500"></i>';
+        } else { span.innerHTML = ''; }
+      });
+    }
+    function renderInventory(){
+      const term = (searchFilter.value||'').toLowerCase();
+      const t = typeFilterSelect.value;
+      let filtered = inventory.filter(it=>{
+        const s = it.name.toLowerCase().includes(term) || it.brand.toLowerCase().includes(term);
+        const mt = t==='all' || it.type===t;
+        return s && mt;
+      });
+      const keyMap = { product:'name', brand:'brand', type:'type', quantity:'quantity' };
+      const sortKey = keyMap[sortConfig.key];
+      filtered.sort((a,b)=>{
+        const av=a[sortKey], bv=b[sortKey];
+        return typeof av==='string'
+          ? (sortConfig.direction==='asc'? av.localeCompare(bv): bv.localeCompare(av))
+          : (sortConfig.direction==='asc'? av-bv : bv-av);
+      });
+
+      inventoryTableBody.innerHTML='';
+      emptyState.classList.toggle('hidden', filtered.length>0);
+      filtered.forEach(it=>{
+        const low = it.quantity<=it.minQuantity;
+        const badge = it.type==='Adesivo' ? 'badge-adesivo' : it.type==='Insumo' ? 'badge-insumo' : 'badge-default';
+        const tr = document.createElement('tr');
+        tr.className = `border-b border-gray-200 dark:border-gray-800 hover:bg-gray-100 ${low?'bg-yellow-50 dark:!bg-yellow-900/20':''} ${low?'low-row':''}`;
+        tr.innerHTML = `
+          <td class="p-4">
+            <div class="font-medium">${it.name}</div>
+            <div class="text-sm text-gray-500 md:hidden">${it.brand}</div>
+          </td>
+          <td class="p-4 hidden md:table-cell">${it.brand}</td>
+          <td class="p-4"><span class="px-2 py-1 text-xs font-semibold rounded-full ${badge}">${it.type}</span></td>
+          <td class="p-4 text-center font-bold ${low?'text-red-600':''}">
+            ${low?`<i class="fas fa-exclamation-triangle text-yellow-500 mr-2" title="Mínimo: ${it.minQuantity}"></i>`:''}${it.quantity}
+          </td>
+          <td class="p-4 text-center">
+            <div class="flex justify-center items-center gap-2">
+              <button title="–1" class="quick-deduct-1 text-red-500 hover:text-red-700" data-id="${it.id}"><i class="fa-solid fa-circle-minus"></i></button>
+              <button title="+1" class="quick-add-1 text-blue-500 hover:text-blue-700" data-id="${it.id}"><i class="fa-solid fa-circle-plus"></i></button>
+              <button title="Dar Baixa" class="deduct-btn text-red-500 hover:text-red-700" data-id="${it.id}"><i class="fas fa-minus-circle"></i></button>
+              <button title="Etiqueta" class="generate-label-btn text-purple-500 hover:text-purple-700" data-id="${it.id}"><i class="fas fa-qrcode"></i></button>
+              <button title="Excluir" class="delete-item-btn text-gray-500 hover:text-gray-700" data-id="${it.id}"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </td>
+        `;
+        inventoryTableBody.appendChild(tr);
+      });
+      updateSortIcons();
+    }
+
+    function postLog(entry){
+      fetch('/api/log', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        credentials:'include', body: JSON.stringify(entry||{})
+      }).catch(()=>{});
+    }
+
+    searchFilter.addEventListener('input', renderInventory);
+    typeFilterSelect.addEventListener('change', renderInventory);
+    inventoryTableHead.addEventListener('click', (e)=>{
+      const h = e.target.closest('.sortable-header'); if (!h) return;
+      const key = h.dataset.sort;
+      sortConfig = (sortConfig.key===key) ? { key, direction: sortConfig.direction==='asc'?'desc':'asc' } : { key, direction:'asc' };
+      renderInventory();
+    });
+    inventoryTableBody.addEventListener('click', (e)=>{
+      const btn = e.target.closest('button'); if (!btn) return;
+      const id = btn.dataset.id;
+      const item = inventory.find(i=>i.id===id);
+      if (!item) return;
+      if (btn.classList.contains('generate-label-btn')) openLabelModal(item);
+      else if (btn.classList.contains('deduct-btn')) openDeductModal(item);
+      else if (btn.classList.contains('delete-item-btn')) {
+        if (confirm('Remover este item?')) {
+          const before=item.quantity; inventory = inventory.filter(i=>i.id!==id); saveInventory(); renderInventory(); recordDailySnapshot(); checkLowStockAndNotify(); postLog({ action:'delete', itemId:item.id, productName:item.name, before, delta:-before, after:0 });
+        }
+      }
+      else if (btn.classList.contains('quick-deduct-1')) {
+        if (item.quantity>0){ const before=item.quantity; item.quantity-=1; const after=item.quantity; saveInventory(); renderInventory(); recordDailySnapshot(); checkLowStockAndNotify(); postLog({ action:'deduct', itemId:item.id, productName:item.name, before, delta:-1, after }); }
+      }
+      else if (btn.classList.contains('quick-add-1')) {
+        const before=item.quantity; item.quantity+=1; const after=item.quantity; saveInventory(); renderInventory(); recordDailySnapshot(); checkLowStockAndNotify(); postLog({ action:'add', itemId:item.id, productName:item.name, before, delta:1, after });
+      }
+    });
+
+    // ====== MODAIS ======
+    function populateProductsSelect(){
+      itemNameSelect.innerHTML = '<option value="">-- Selecione um produto --</option>';
+      if (!baseProducts.length){ itemNameSelect.innerHTML = '<option value="">Cadastre um produto primeiro</option>'; return; }
+      [...baseProducts].sort((a,b)=>a.name.localeCompare(b.name)).forEach(p=>{
+        const opt = document.createElement('option'); opt.value=p.id; opt.textContent = `${p.name} (${p.brand})`; itemNameSelect.appendChild(opt);
+      });
+    }
+    itemNameSelect.addEventListener('change', ()=>{
+      const p = baseProducts.find(x=>x.id===itemNameSelect.value);
+      document.getElementById('item-brand').value = p? p.brand:'';
+      document.getElementById('item-type').value = p? p.type:'';
+    });
+    addItemBtn.addEventListener('click', async ()=>{ if (!(await requireAuth())) return; itemForm.reset(); populateProductsSelect(); itemModal.classList.remove('hidden'); setTimeout(()=>itemNameSelect.focus(), 50); });
+    document.getElementById('cancel-btn').addEventListener('click', ()=> itemModal.classList.add('hidden'));
+    itemForm.addEventListener('submit',(e)=>{
+      e.preventDefault();
+      const baseId = itemNameSelect.value;
+      const base = baseProducts.find(p=>p.id===baseId);
+      const qty = clampInt(parseInt(document.getElementById('item-quantity').value),1);
+      if (!base || !qty) return;
+
+      let existing = inventory.find(i=>i.baseProductId===baseId);
+      if (existing) { const before=existing.quantity; existing.quantity += qty; postLog({ action:'add', itemId: existing.id, productName: existing.name, before, delta: qty, after: existing.quantity }); }
+      else {
+        existing = { id: Date.now().toString(), baseProductId: base.id, name: base.name, brand: base.brand, type: base.type, quantity: qty, minQuantity: base.minQuantity };
+        inventory.push(existing);
+        postLog({ action:'create', itemId: existing.id, productName: existing.name, before: 0, delta: qty, after: qty });
+      }
+      saveInventory(); renderInventory(); itemModal.classList.add('hidden'); openLabelModal(existing); recordDailySnapshot(); checkLowStockAndNotify();
+    });
+
+    function openDeductModal(item){
+      document.getElementById('deduct-item-id').value = item.id;
+      document.getElementById('deduct-item-name').textContent = item.name;
+      document.getElementById('deduct-current-quantity').textContent = item.quantity;
+      const dq = document.getElementById('deduct-quantity');
+      dq.value=''; dq.max=item.quantity; deductModal.classList.remove('hidden'); setTimeout(()=>dq.focus(), 50);
+    }
+    document.getElementById('cancel-deduct-btn').addEventListener('click', ()=>deductModal.classList.add('hidden'));
+    quickMinusBtn.addEventListener('click', ()=>{ const dq=document.getElementById('deduct-quantity'); const cur=clampInt(parseInt(dq.value||'0'),0); dq.value=Math.max(1, cur-1); dq.focus(); });
+    quickPlusBtn.addEventListener('click', ()=>{ const dq=document.getElementById('deduct-quantity'); const cur=clampInt(parseInt(dq.value||'0'),0); const max=clampInt(parseInt(dq.max||'1'),1); dq.value=Math.min(max, cur+1); dq.focus(); });
+    deductForm.addEventListener('submit',(e)=>{
+      e.preventDefault();
+      const id = document.getElementById('deduct-item-id').value;
+      const qty = clampInt(parseInt(document.getElementById('deduct-quantity').value),1);
+      const item = inventory.find(i=>i.id===id);
+      if (item && qty>0 && qty<=item.quantity){ const before=item.quantity; item.quantity -= qty; const after=item.quantity; saveInventory(); renderInventory(); deductForm.reset(); deductModal.classList.add('hidden'); recordDailySnapshot(); checkLowStockAndNotify(); postLog({ action:'deduct', itemId:item.id, productName:item.name, before, delta:-qty, after }); }
+      else alert('Quantidade inválida!');
+    });
+
+    function openLabelModal(item){
+      document.getElementById('label-item-name').textContent = item.name;
+      document.getElementById('label-item-brand').textContent = item.brand;
+      document.getElementById('label-item-id').textContent = `ID: ${item.id}`;
+      qrCodeContainer.innerHTML = '';
+      new QRCode(qrCodeContainer, { text:`ID:${item.id}`, width:160, height:160, colorDark:"#000", colorLight:"#fff", correctLevel:QRCode.CorrectLevel.H });
+      labelModal.classList.remove('hidden');
+    }
+    document.getElementById('close-label-btn').addEventListener('click', ()=> labelModal.classList.add('hidden'));
+    document.getElementById('print-label-btn').addEventListener('click', ()=> window.print());
+
+    function stopScanner(){
+      if (html5QrCode){
+        try{ html5QrCode.stop().then(()=>{ isScanning=false; scannerModal.classList.add('hidden'); }).catch(()=>{ isScanning=false; scannerModal.classList.add('hidden'); }); }
+        catch(_){ isScanning=false; scannerModal.classList.add('hidden'); }
+      } else scannerModal.classList.add('hidden');
+    }
+    function onScanSuccess(decodedText){
+      if (decodedText && decodedText.startsWith('ID:')){
+        const id = decodedText.split(':')[1]; const item = inventory.find(i=>i.id===id);
+        stopScanner(); if (item) openDeductModal(item); else alert('Item não encontrado pelo QR.');
+      }
+    }
+    function onScanFailure(_){ }
+    scanQrBtn.addEventListener('click', async ()=>{
+      if (!(await requireAuth())) return;
+      scannerModal.classList.remove('hidden');
+      html5QrCode = new Html5Qrcode("qr-reader");
+      html5QrCode.start({ facingMode:"environment" }, { fps:10, qrbox:{ width:250, height:250 } }, onScanSuccess, onScanFailure)
+        .then(()=>{ isScanning=true; })
+        .catch(()=>{ alert("Não foi possível iniciar a câmera."); });
+    });
+    document.getElementById('close-scanner-btn').addEventListener('click', stopScanner);
+
+    // ====== BACKUP ======
+    exportBtn.addEventListener('click', ()=>{
+      const payload = { meta, baseProducts, inventory, materialTypes, dailyTotals };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=`estoque-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`; a.click();
+      URL.revokeObjectURL(url);
+    });
+    importInput.addEventListener('change', (e)=>{
+      const file = e.target.files?.[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev)=>{
+        try{
+          const data = JSON.parse(String(ev.target.result||'{}'));
+          baseProducts = Array.isArray(data.baseProducts) ? data.baseProducts : baseProducts;
+          inventory = Array.isArray(data.inventory) ? data.inventory : inventory;
+          materialTypes = Array.isArray(data.materialTypes) ? data.materialTypes : materialTypes;
+          dailyTotals = typeof data.dailyTotals==='object' && data.dailyTotals ? data.dailyTotals : dailyTotals;
+          meta = data.meta || meta;
+          // >>> FIX: normaliza duplicados e alinha estoque
+ensureUniqueBaseProductIds();
+saveDataToServer();
+renderMaterialTypes();
+renderBaseProducts();
+renderInventory();
+          alert('Importação concluída e dados salvos no servidor!');
+        } catch(err){ alert('Falha ao importar JSON.'); }
+        finally{ e.target.value=''; }
+      };
+      reader.readAsText(file);
+    });
+
+    // ====== DASHBOARD ======
+    let chartByType=null, chartByBrand=null, chartTypeOverTime=null;
+
+    function sumByKey(items, key, { onlyType='all' } = {}){
+      const acc={};
+      items.forEach(it=>{
+        if (onlyType!=='all' && it.type!==onlyType) return;
+        const k = it[key] || '—';
+        acc[k] = (acc[k]||0) + (Number(it.quantity)||0);
+      });
+      return acc;
+    }
+    function downloadCSV(filename, rows){
+      if (!rows.length) return;
+      const header = Object.keys(rows[0]).join(',');
+      const body = rows.map(r=>Object.values(r).map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([header+'\n'+body], { type:'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+    }
+    function renderDashboard(){
+      const totalQty = inventory.reduce((s,it)=>s+(Number(it.quantity)||0),0);
+      const skus = inventory.length;
+      const lowCount = inventory.filter(it => (Number(it.quantity)||0) <= (Number(it.minQuantity)||0)).length;
+      const typesDistinct = unique(inventory.map(i=>i.type)).length;
+      kpiTotalQty.textContent = totalQty; kpiSkus.textContent = skus; kpiLow.textContent = lowCount; kpiTypes.textContent = typesDistinct;
+
+      const types = ['all', ...unique(inventory.map(i=>i.type))];
+      dashBrandTypeFilter.innerHTML = types.map(t=>`<option value="${t}">${t==='all'?'Todos os Tipos':t}</option>`).join('');
+
+      const ctxType = document.getElementById('chart-by-type').getContext('2d');
+      const byType = sumByKey(inventory,'type');
+      const labelsType = Object.keys(byType);
+      const dataType = Object.values(byType);
+      if (chartByType) chartByType.destroy();
+      chartByType = new Chart(ctxType, { type:'doughnut', data:{ labels:labelsType, datasets:[{ data:dataType }] }, options:{ plugins:{ legend:{ position:'bottom' } } } });
+
+      renderBrandChart();
+      renderLowStockTable();
+      renderTypeOverTime();
+
+      dashBrandTypeFilter.onchange = ()=>renderDashboard();
+      dashBrandLimit.onchange = ()=>renderDashboard();
+      exportLowCSVBtn.onclick = ()=>{
+        const rows = getLowStockItems().map(it=>({
+          Produto:it.name, Marca:it.brand, Tipo:it.type, Quantidade:it.quantity, Minimo:it.minQuantity, Faltam: Math.max(0, it.minQuantity - it.quantity)
+        }));
+        if (!rows.length) return alert('Sem itens em baixo estoque.');
+        downloadCSV(`baixo-estoque-${todayKey()}.csv`, rows);
+      };
+      goToPurchaseBtn.onclick = ()=>{
+        const items = getLowStockItems();
+        if (!items.length) return alert('Sem itens em baixo estoque.');
+        const lines = items.map(it=>`• ${it.name} (${it.brand}) — qtd ${it.quantity} / mínimo ${it.minQuantity} — comprar ${Math.max(0, it.minQuantity-it.quantity)}`);
+        const msg = `Lista de compras - ${todayKey()}\n${lines.join('\n')}`;
+        let number = DEFAULT_WA_NUMBER;
+        if (!number){
+          number = prompt('Número do WhatsApp (somente dígitos, com DDI — ex.: 5547999999999):','55');
+          if (!number) return;
+        }
+        const url = `https://wa.me/${number}?text=${encodeURIComponent(msg)}`;
+        window.open(url,'_blank');
+      };
+    }
+
+    function renderBrandChart(){
+      const ctxBrand = document.getElementById('chart-by-brand').getContext('2d');
+      const onlyType = dashBrandTypeFilter.value || 'all';
+      const byBrand = sumByKey(inventory, 'brand', { onlyType });
+      const topK = Number(dashBrandLimit.value||10);
+      const pairs = Object.entries(byBrand).sort((a,b)=>b[1]-a[1]).slice(0, topK);
+      const labels = pairs.map(p=>p[0]), data = pairs.map(p=>p[1]);
+      if (chartByBrand) chartByBrand.destroy();
+      chartByBrand = new Chart(ctxBrand, {
+        type:'bar', data:{ labels, datasets:[{ label:'Qtd', data }] },
+        options:{ indexAxis:'y', plugins:{ legend:{display:false} }, scales:{ x:{ beginAtZero:true } } }
+      });
+    }
+
+    function getLowStockItems(){
+      return inventory
+        .filter(it => (Number(it.quantity)||0) <= (Number(it.minQuantity)||0))
+        .map(it => ({...it, need: Math.max(0, it.minQuantity - it.quantity)}))
+        .sort((a,b)=> (b.need - a.need) || a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
+    }
+    function renderLowStockTable(){
+      const items = getLowStockItems();
+      lowStockBody.innerHTML='';
+      lowStockEmpty.classList.toggle('hidden', items.length>0);
+      items.forEach(it=>{
+        const tr = document.createElement('tr'); tr.className='border-b border-gray-200 dark:border-gray-800';
+        tr.innerHTML = `
+          <td class="p-3">${it.name}</td>
+          <td class="p-3">${it.brand}</td>
+          <td class="p-3">${it.type}</td>
+          <td class="p-3 text-center font-semibold ${it.quantity<=it.minQuantity?'text-red-600':''}">${it.quantity}</td>
+          <td class="p-3 text-center">${it.minQuantity}</td>
+          <td class="p-3 text-center font-semibold">${Math.max(0, it.minQuantity - it.quantity)}</td>
+        `;
+        lowStockBody.appendChild(tr);
+      });
+    }
+
+    function renderTypeOverTime(){
+      const days = [];
+      for (let i=29; i>=0; i--){ const d = new Date(); d.setDate(d.getDate()-i); days.push(d.toISOString().slice(0,10)); }
+      const types = unique(Object.values(dailyTotals).flatMap(o=>Object.keys(o||{})).concat(inventory.map(i=>i.type)));
+      const datasets = types.map((t)=>({ label: t, data: days.map(day => (dailyTotals[day] && typeof dailyTotals[day][t]==='number') ? dailyTotals[day][t] : 0), borderWidth:2, tension:0.25 }));
+      const ctx = document.getElementById('chart-type-over-time').getContext('2d');
+      if (chartTypeOverTime) chartTypeOverTime.destroy();
+      chartTypeOverTime = new Chart(ctx, { type:'line', data:{ labels:days, datasets }, options:{ plugins:{ legend:{ position:'bottom' } }, scales:{ x:{ ticks:{ maxRotation:0, autoSkip:true, maxTicksLimit:10 } }, y:{ beginAtZero:true } } } });
+    }
+
+    // ====== HISTÓRICO ======
+    async function fetchLogs(filters={}){
+      const qs = new URLSearchParams(filters).toString();
+      const r = await fetch('/api/log' + (qs?`?${qs}`:''), { credentials:'include' });
+      if (!r.ok) throw new Error('fail logs');
+      return r.json();
+    }
+    function renderHistoryTable(rows){
+      const tbody = document.getElementById('hist-tbody');
+      const empty = document.getElementById('hist-empty');
+      tbody.innerHTML = '';
+      empty.classList.toggle('hidden', rows.length>0);
+      rows.forEach(row=>{
+        const tr = document.createElement('tr');
+        tr.className = 'border-b';
+        const dt = new Date(row.ts);
+        tr.innerHTML = `
+          <td class="p-3 whitespace-nowrap">${dt.toLocaleString()}</td>
+          <td class="p-3">${row.user||'—'}</td>
+          <td class="p-3">${row.action}</td>
+          <td class="p-3">${row.productName||'—'}</td>
+          <td class="p-3 text-center">${row.before ?? '—'}</td>
+          <td class="p-3 text-center">${row.delta ?? '—'}</td>
+          <td class="p-3 text-center">${row.after ?? '—'}</td>
+          <td class="p-3">${row.note||''}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    async function refreshHistory(){
+      const user = document.getElementById('hist-user').value.trim();
+      const action = document.getElementById('hist-action').value;
+      const data = await fetchLogs({ user, action });
+      renderHistoryTable(data);
+    }
+    document.getElementById('hist-refresh')?.addEventListener('click', refreshHistory);
+
+    // ====== HOTKEYS (corrigido: não ativa dentro de inputs) ======
+function isTypingInForm(e){
+  const el = e.target;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = (el.tagName || '').toUpperCase();
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+window.addEventListener('keydown', (e) => {
+  // Se estiver digitando num campo, não disparar atalhos
+  if (isTypingInForm(e)) return;
+
+  // Focar busca com "/" (somente se não estiver digitando)
+  if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    const searchFilter = document.getElementById('search-filter');
+    searchFilter?.focus();
+    return;
+  }
+
+  // Novo item com "n" (sem Ctrl/Alt/Meta)
+  if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    document.getElementById('add-item-btn')?.click();
+    return;
+  }
+
+  // Ler QR com "q" (sem Ctrl/Alt/Meta)
+  if ((e.key === 'q' || e.key === 'Q') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    document.getElementById('scan-qr-btn')?.click();
+    return;
+  }
+});
+
+    // ====== INIT ======
+    async function loadDataFromServer() {
+      try {
+        // exige auth; se 401, abre login
+        const response = await fetch('/api/data', { credentials:'include' });
+        if (response.status === 401){ showLogin(); return; }
+        if (!response.ok) throw new Error('Resposta do servidor não foi OK');
+        const data = await response.json();
+ 
+        inventory = data.inventory || [];
+        baseProducts = data.baseProducts || [];
+        materialTypes = data.materialTypes || DEFAULT_TYPES.slice();
+        dailyTotals = data.dailyTotals || {};
+        meta = data.meta || { version: 1 };
+        
+// >>> FIX: normaliza IDs duplicados e alinha estoque
+ensureUniqueBaseProductIds();
+await saveDataToServer(); // persiste a correção no backend
+
+runMigration();
+initialDailyIfEmpty();
+        
+        
+        runMigration();
+        initialDailyIfEmpty();
+        renderMaterialTypes();
+        switchView('inventory');
+        checkLowStockAndNotify();
+      } catch (error) {
+        console.error('Erro ao carregar dados do servidor:', error);
+        document.body.innerHTML = `<div class="text-center p-8">
+          <h1 class="text-2xl font-bold text-red-600">Erro de Conexão</h1>
+          <p class="text-gray-700">Não foi possível carregar os dados do servidor de estoque.
+          Verifique se o servidor está rodando e se você está na rede correta.</p>
+        </div>`;
+      }
+    }
+
+    function initialDailyIfEmpty(){
+      const day = todayKey();
+      if (!dailyTotals[day]) recordDailySnapshot();
+    }
+    
+    loadDataFromServer();
+  });
+  </script>
+  <div id="toast-container"></div>
+</body>
+</html>
