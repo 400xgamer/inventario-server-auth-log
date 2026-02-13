@@ -35,6 +35,15 @@ function ensureCerts() {
 
 // ===== DATA =====
 function loadData() {
+  // Se data.json não existe, cria a partir de data-default.json
+  if (!fs.existsSync(DATA_FILE)) {
+    const defaultPath = path.join(__dirname, "data-default.json");
+    if (fs.existsSync(defaultPath)) {
+      fs.copyFileSync(defaultPath, DATA_FILE);
+      console.log("[data] Inicializado a partir de data-default.json");
+    }
+  }
+  
   try {
     const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
     if (!data.users) data.users = [];
