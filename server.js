@@ -183,7 +183,11 @@ app.delete("/api/users/:username", requireAuth, requireAdmin, (req, res) => {
 });
 
 // ===== ADMIN PANEL =====
-app.get("/admin", (_req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
+app.get("/admin", (_req, res) => {
+  const adminHtml = fs.readFileSync(path.join(__dirname, "public", "admin.html"), "utf8");
+  res.set("Content-Type", "text/html; charset=utf-8");
+  res.send(adminHtml);
+});
 
 // ===== STATIC FRONTEND =====
 app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
