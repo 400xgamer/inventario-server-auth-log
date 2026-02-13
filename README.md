@@ -54,3 +54,4 @@ Se quiser, eu posso:
 - (C) Tentar criar o repositório remoto com `gh` se você autorizar/estiver autenticado.
 
 Diga qual opção prefere que eu execute em seguida.
+# inventario-server-auth-log
