@@ -198,29 +198,7 @@ app.get("/admin", (_req, res) => {
   res.send(adminHtml);
 });
 
-// ===== ADMIN UTIL =====
-// Rota temporária: importa data-default.json para data.json (exige admin)
-app.post('/admin/import-default', requireAuth, requireAdmin, (_req, res) => {
-  const defaultPath = path.join(__dirname, 'data-default.json');
-  if (!fs.existsSync(defaultPath)) return res.status(404).json({ error: 'missing_default' });
-  try {
-    fs.copyFileSync(defaultPath, DATA_FILE);
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error('[admin/import-default] error', err);
-    return res.status(500).json({ error: 'copy_failed' });
-  }
-});
-
-// ===== DEBUG =====
-// Rota temporária para inspecionar sessão (retorna req.session)
-app.get('/debug/session', (req, res) => {
-  try {
-    return res.json({ session: req.session || null });
-  } catch (err) {
-    return res.status(500).json({ error: 'failed', detail: String(err) });
-  }
-});
+// (Rotas temporárias removidas)
 
 // ===== STATIC FRONTEND =====
 app.use((_req, res, next) => {
