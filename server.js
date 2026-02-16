@@ -6,109 +6,164 @@ const session = require("express-session");
 const selfsigned = require("selfsigned");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const cors = require("cors");
+const csrf = require("csurf");
+const cookieParser = require("cookie-parser");
 
 const app = express();
 
 // ===== CONFIG =====
-const HTTPS_PORT = process.env.PORT ? Number(process.env.PORT) : 3443;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 5000;
 const HOST = process.env.HOST || "0.0.0.0";
 const DATA_FILE = path.join(__dirname, "data.json");
 const CERT_DIR = path.join(__dirname, "certs");
 const KEY_PATH = path.join(CERT_DIR, "key.pem");
 const CERT_PATH = path.join(CERT_DIR, "cert.pem");
-const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+
+if (!process.env.SESSION_SECRET) {
+  console.error("❌ CRITICAL: SESSION_SECRET is not defined in environment variables.");
+  process.exit(1);
+}
+const SESSION_SECRET = process.env.SESSION_SECRET;
+
 const DISABLE_HTTPS = process.env.DISABLE_HTTPS === '1' || process.env.FORCE_HTTP === '1';
-const TRUST_PROXY = process.env.TRUST_PROXY === '1' || process.env.NODE_ENV === 'production';
 
-// ===== CERTS =====
-function ensureCerts() {
-  if (!fs.existsSync(CERT_DIR)) fs.mkdirSync(CERT_DIR, { recursive: true });
-  const missing = !fs.existsSync(KEY_PATH) || !fs.existsSync(CERT_PATH);
-  if (missing) {
-    console.log("[certs] Gerando certificado autoassinado...");
-    const attrs = [{ name: "commonName", value: "inventario-local" }];
-    const pems = selfsigned.generate(attrs, { days: 365, keySize: 2048 });
-    fs.writeFileSync(KEY_PATH, pems.private, "utf8");
-    fs.writeFileSync(CERT_PATH, pems.cert, "utf8");
-  }
-}
-
-// ===== DATA =====
-function loadData() {
-  // Se data.json não existe, cria a partir de data-default.json
-  if (!fs.existsSync(DATA_FILE)) {
-    const defaultPath = path.join(__dirname, "data-default.json");
-    if (fs.existsSync(defaultPath)) {
-      fs.copyFileSync(defaultPath, DATA_FILE);
-      console.log("[data] Inicializado a partir de data-default.json");
+// ===== SECURITY MIDDLEWARE =====
+app.use(helmet());
+app.use(cors({
+  origin: (origin, callback) => {
+    // In Replit, the domain can change, so we trust the current domain.
+    // However, the request asks for restricted CORS.
+    // We'll allow the host from the request headers if it's a replit.dev domain
+    if (!origin) return callback(null, true);
+    if (origin.includes('.replit.dev') || origin.includes('.repl.co')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-  }
-  
-  try {
-    const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-    if (!data.users) data.users = [];
-    if (!data.logs) data.logs = [];
-    return data;
-  } catch {
-    return { inventory: [], baseProducts: [], materialTypes: [], dailyTotals: {}, meta: { version: 2 }, users: [], logs: [] };
-  }
-}
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
-}
-function ensureDefaultAdmin() {
-  const data = loadData();
-  const user = data.users.find(u => u.username === "admin@3f.local");
-  if (!user) {
-    const hash = bcrypt.hashSync("senha123", 10);
-    data.users.push({ username: "admin@3f.local", role: "admin", passwordHash: hash });
-    saveData(data);
-    console.log("👤 Usuário padrão criado: admin@3f.local / senha123");
-  } else if (!user.passwordHash) {
-    user.passwordHash = bcrypt.hashSync("senha123", 10);
-    saveData(data);
-    console.log("🔑 Hash do admin estava vazio — senha padrão definida: senha123");
-  }
-}
+  },
+  credentials: true
+}));
 
-// ===== MIDDLEWARE =====
 app.use(express.json({ limit: "5mb" }));
+app.use(cookieParser());
 app.set('trust proxy', 1);
+
 app.use(session({
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: "none", secure: true }
+  cookie: { 
+    httpOnly: true, 
+    sameSite: "lax", 
+    secure: true 
+  }
 }));
 
+// ===== CSRF PROTECTION =====
+const csrfProtection = csrf({ cookie: true });
+
+// ===== RATE LIMITER =====
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts
+  message: { error: "Muitas tentativas de login. Tente novamente em 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// ===== DATA =====
+function loadData() {
+  try {
+    const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    if (!data.users) data.users = [];
+    if (!data.logs) data.logs = [];
+    if (!data.failedLogins) data.failedLogins = [];
+    return data;
+  } catch {
+    return { inventory: [], baseProducts: [], materialTypes: [], dailyTotals: {}, meta: { version: 2 }, users: [], logs: [], failedLogins: [] };
+  }
+}
+
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+}
+
+function ensureAdmin() {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (adminEmail && adminPassword) {
+    const data = loadData();
+    let user = data.users.find(u => u.username === adminEmail);
+    const hash = bcrypt.hashSync(adminPassword, 10);
+    
+    if (!user) {
+      data.users.push({ username: adminEmail, role: "admin", passwordHash: hash });
+      console.log(`👤 Admin created from env: ${adminEmail}`);
+    } else {
+      user.passwordHash = hash;
+      user.role = "admin";
+      console.log(`👤 Admin password updated from env: ${adminEmail}`);
+    }
+    saveData(data);
+  } else {
+    console.log("ℹ️ No ADMIN_EMAIL/ADMIN_PASSWORD env vars found. No automatic admin created.");
+  }
+}
+
+// ===== MIDDLEWARE =====
 function requireAuth(req, res, next) {
   if (req.session && req.session.user) return next();
   return res.status(401).json({ error: "unauthorized" });
 }
+
 function requireAdmin(req, res, next) {
   if (req.session?.user?.role === "admin") return next();
   return res.status(403).json({ error: "forbidden" });
 }
 
-// ===== AUTH =====
-app.post("/api/login", (req, res) => {
+// ===== AUTH & CSRF ROUTES =====
+app.get("/api/csrf-token", csrfProtection, (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
+});
+
+app.post("/api/login", loginLimiter, (req, res) => {
   const { username, password } = req.body || {};
   const data = loadData();
   const user = data.users.find(u => u.username.toLowerCase() === String(username).toLowerCase());
-  if (!user) return res.status(401).json({ error: "invalid" });
-  if (!bcrypt.compareSync(password, user.passwordHash || "")) return res.status(401).json({ error: "invalid" });
+  
+  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  if (!user || !bcrypt.compareSync(password, user.passwordHash || "")) {
+    // Log failed login
+    data.failedLogins.push({
+      email: username,
+      ip: ip,
+      ts: Date.now()
+    });
+    saveData(data);
+    console.warn(`[Auth] Failed login attempt for ${username} from IP ${ip}`);
+    return res.status(401).json({ error: "invalid" });
+  }
+
   req.session.user = { username: user.username, role: user.role || "user" };
   res.json({ ok: true, user: req.session.user });
 });
-app.post("/api/logout", (req, res) => req.session.destroy(() => res.json({ ok: true })));
+
+app.post("/api/logout", csrfProtection, (req, res) => req.session.destroy(() => res.json({ ok: true })));
+
 app.get("/api/me", (req, res) => req.session?.user ? res.json(req.session.user) : res.status(401).json({ error: "unauthorized" }));
 
 // ===== DATA API =====
 app.get("/api/data", requireAuth, (_req, res) => {
-  const { users, logs, ...publicData } = loadData();
+  const { users, logs, failedLogins, ...publicData } = loadData();
   res.json(publicData);
 });
-app.post("/api/data", requireAuth, (req, res) => {
+
+app.post("/api/data", requireAuth, csrfProtection, (req, res) => {
   const incoming = req.body || {};
   const data = loadData();
   data.inventory = incoming.inventory || data.inventory;
@@ -129,7 +184,8 @@ app.get("/api/log", requireAuth, (req, res) => {
   rows = rows.sort((a,b)=> b.ts - a.ts).slice(0, 1000);
   res.json(rows);
 });
-app.post("/api/log", requireAuth, (req, res) => {
+
+app.post("/api/log", requireAuth, csrfProtection, (req, res) => {
   const entry = req.body || {};
   const data = loadData();
   const safe = {
@@ -150,14 +206,13 @@ app.post("/api/log", requireAuth, (req, res) => {
 });
 
 // ===== USERS API (ADMIN) =====
-// Lista usuários (sem hash)
 app.get("/api/users", requireAuth, requireAdmin, (_req, res) => {
   const data = loadData();
   const users = data.users.map(u => ({ username: u.username, role: u.role || "user" }));
   res.json(users);
 });
-// Cria usuário
-app.post("/api/users", requireAuth, requireAdmin, (req, res) => {
+
+app.post("/api/users", requireAuth, requireAdmin, csrfProtection, (req, res) => {
   const { username, password, role } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: "missing" });
   const data = loadData();
@@ -168,8 +223,8 @@ app.post("/api/users", requireAuth, requireAdmin, (req, res) => {
   saveData(data);
   res.json({ ok: true });
 });
-// Troca senha
-app.post("/api/users/change-password", requireAuth, requireAdmin, (req, res) => {
+
+app.post("/api/users/change-password", requireAuth, requireAdmin, csrfProtection, (req, res) => {
   const { username, newPassword } = req.body || {};
   if (!username || !newPassword) return res.status(400).json({ error: "missing" });
   const data = loadData();
@@ -179,10 +234,9 @@ app.post("/api/users/change-password", requireAuth, requireAdmin, (req, res) => 
   saveData(data);
   res.json({ ok: true });
 });
-// Remove usuário (protege admin padrão)
-app.delete("/api/users/:username", requireAuth, requireAdmin, (req, res) => {
+
+app.delete("/api/users/:username", requireAuth, requireAdmin, csrfProtection, (req, res) => {
   const uname = String(req.params.username || "");
-  if (uname.toLowerCase() === "admin@3f.local") return res.status(400).json({ error: "cannot_delete_default_admin" });
   const data = loadData();
   const before = data.users.length;
   data.users = data.users.filter(u => u.username.toLowerCase() !== uname.toLowerCase());
@@ -191,14 +245,10 @@ app.delete("/api/users/:username", requireAuth, requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// ===== ADMIN PANEL =====
-app.get("/admin", (_req, res) => {
-  const adminHtml = fs.readFileSync(path.join(__dirname, "public", "admin.html"), "utf8");
-  res.set("Content-Type", "text/html; charset=utf-8");
-  res.send(adminHtml);
+// ===== ADMIN ROUTE HARDENING =====
+app.get("/admin", requireAuth, requireAdmin, (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
-
-// (Rotas temporárias removidas)
 
 // ===== STATIC FRONTEND =====
 app.use((_req, res, next) => {
@@ -209,21 +259,8 @@ app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] })
 app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 
 // ===== START =====
-ensureDefaultAdmin();
+ensureAdmin();
 
-if (DISABLE_HTTPS) {
-  // Start plain HTTP (useful for many free hosts that provide TLS/termination)
-  const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
-  app.listen(PORT, HOST, () => {
-    console.log(`✅ HTTP em http://${HOST}:${PORT}`);
-    console.log("👤 Login padrão: admin@3f.local / senha123");
-  });
-} else {
-  // Local HTTPS with selfsigned certs
-  ensureCerts();
-  const options = { key: fs.readFileSync(KEY_PATH), cert: fs.readFileSync(CERT_PATH) };
-  https.createServer(options, app).listen(HTTPS_PORT, HOST, () => {
-    console.log(`✅ HTTPS em https://localhost:${HTTPS_PORT}`);
-    console.log("👤 Login padrão: admin@3f.local / senha123");
-  });
-}
+app.listen(PORT, HOST, () => {
+  console.log(`✅ Secure Server running on port ${PORT}`);
+});

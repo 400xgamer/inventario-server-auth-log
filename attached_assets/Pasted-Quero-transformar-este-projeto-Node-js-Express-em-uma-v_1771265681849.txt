@@ -1,0 +1,142 @@
+Quero transformar este projeto Node.js + Express em uma versão segura para produção no Replit (URL pública).
+
+Objetivo: aplicar hardening básico e remover vulnerabilidades críticas.
+
+Faça as seguintes alterações no projeto:
+
+1️⃣ REMOVER ADMIN PADRÃO FIXO
+
+Remover qualquer criação automática do usuário:
+admin@3f.local
+
+senha123
+
+Criar admin SOMENTE se existirem as variáveis de ambiente:
+
+ADMIN_EMAIL
+ADMIN_PASSWORD
+
+Se não existirem, NÃO criar admin automaticamente.
+
+Garantir que a senha seja sempre armazenada com bcrypt hash.
+
+2️⃣ CONFIGURAR SESSION SEGURA PARA PRODUÇÃO
+
+Modificar express-session para:
+
+secret vindo de process.env.SESSION_SECRET
+
+resave: false
+
+saveUninitialized: false
+
+cookie:
+httpOnly: true
+secure: true (porque Replit usa HTTPS)
+sameSite: "lax"
+
+Se SESSION_SECRET não existir, lançar erro e impedir o servidor de iniciar.
+
+3️⃣ ADICIONAR RATE LIMIT NO LOGIN
+
+Instalar e configurar express-rate-limit.
+
+Criar rate-limit específico para /api/login:
+
+máximo 5 tentativas por IP
+
+janela de 15 minutos
+
+retornar mensagem clara de bloqueio
+
+Aplicar rate-limit somente na rota de login.
+
+4️⃣ PROTEGER ROTA /admin
+
+A rota GET /admin deve exigir:
+
+requireAuth
+
+requireAdmin
+
+Se não for admin autenticado → retornar 403.
+
+5️⃣ ADICIONAR HELMET
+
+Instalar e configurar helmet com configuração padrão segura.
+
+6️⃣ CORS RESTRITO
+
+Permitir CORS apenas para o domínio atual do Replit.
+
+Não usar origin "*".
+
+7️⃣ ADICIONAR CSRF PROTECTION
+
+Instalar csurf e:
+
+Aplicar CSRF token em todas as rotas POST, PUT, DELETE.
+
+Enviar token via endpoint GET /api/csrf-token
+
+Esperar token no header:
+x-csrf-token
+
+8️⃣ LOGAR TENTATIVAS DE LOGIN FALHAS
+
+Quando login falhar:
+
+registrar IP
+
+registrar email tentado
+
+registrar timestamp
+
+9️⃣ INSTALAR DEPENDÊNCIAS NECESSÁRIAS
+
+Instalar automaticamente:
+
+helmet
+
+express-rate-limit
+
+csurf
+
+cors
+
+No final:
+
+Me mostrar o novo server.js completo atualizado.
+
+Me mostrar a lista de variáveis de ambiente que devo configurar no Replit Secrets.
+
+Não remover funcionalidades existentes do sistema.
+
+Manter compatibilidade com o frontend atual.
+
+🚀 Depois disso
+
+No Replit você vai criar os Secrets:
+
+SESSION_SECRET
+
+ADMIN_EMAIL
+
+ADMIN_PASSWORD
+
+NODE_ENV = production
+
+🎯 Observação importante (estratégia)
+
+Você está construindo o backbone do seu sistema interno (inventário/produção da 3F).
+Se esse backend cair ou for comprometido, você perde:
+
+dados
+
+histórico
+
+logs
+
+confiança operacional
+
+Então isso aqui não é “excesso de zelo” — é infraestrutura mínima para empresa.
