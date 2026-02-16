@@ -212,6 +212,16 @@ app.post('/admin/import-default', requireAuth, requireAdmin, (_req, res) => {
   }
 });
 
+// ===== DEBUG =====
+// Rota temporária para inspecionar sessão (retorna req.session)
+app.get('/debug/session', (req, res) => {
+  try {
+    return res.json({ session: req.session || null });
+  } catch (err) {
+    return res.status(500).json({ error: 'failed', detail: String(err) });
+  }
+});
+
 // ===== STATIC FRONTEND =====
 app.use((_req, res, next) => {
   res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
